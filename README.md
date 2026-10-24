@@ -2,6 +2,8 @@
 
 Initial FastAPI backend for WindSight, a UK electricity purchasing workspace. No authentication or database.
 
+The backend now includes a validated HTTPX integration for Elexon actual wind generation and historical wind forecasts. See [Elexon integration and verified live results](docs/elexon.md) for query parameters, units, date semantics, retry behavior, and temporary inspection endpoints.
+
 ## Local development
 
 Requires Python 3.11+. Run from this repository root in PowerShell:

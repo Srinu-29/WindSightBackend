@@ -29,7 +29,7 @@ Timeouts: 10 seconds to connect/acquire a connection; 45 seconds per read/write 
 
 ## Temporary inspection endpoints
 
-Enabled by default for development; set `ENABLE_ELEXON_INSPECTION=false` to remove these routes, then restart the backend. No frontend is required.
+These routes are registered directly when the backend starts. No environment switch or frontend is required.
 
 Actuals for January and February 1–3:
 

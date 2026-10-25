@@ -1,4 +1,9 @@
-"""Synthetic fixtures are only used in isolated tests, never as live API data."""
+"""Service tests: controlled inputs check behavior without contacting Elexon.
+
+Pytest discovers functions named test_*. An assert fails a test if its condition
+is false. MockTransport replaces network calls with our handler function; these
+synthetic records are never used by the application as a fallback data source.
+"""
 from datetime import date, datetime, timezone
 
 import httpx
@@ -8,15 +13,22 @@ from app.services.elexon_client import ElexonClient, ElexonError
 
 
 def stamp(value):
+    # Convert a test's readable UTC string into a timezone-aware Python datetime.
     return datetime.fromisoformat(value.replace('Z', '+00:00'))
 
 
 def forecast(**updates):
+    # In a function declaration ** collects named arguments, while * collects
+    # positional arguments. This differs from ** between numbers (exponentiation).
+    # **updates collects named arguments into a dictionary. The | merge lets a
+    # test replace selected default fields without repeating the whole fixture.
     return dict(dataset='WINDFOR', publishTime='2026-01-31T22:30:00Z',
                 startTime='2026-02-02T21:00:00Z', generation=1234) | updates
 
 
 def test_forecast_keeps_february_delivery_and_all_versions():
+    # Duplicate identical rows collapse; another publication survives. The row
+    # exactly at the exclusive February 1 publication boundary is excluded.
     def handler(request):
         assert request.url.path == '/bmrs/api/v1/datasets/WINDFOR/stream'
         assert 'startTime' not in request.url.params
@@ -30,6 +42,7 @@ def test_forecast_keeps_february_delivery_and_all_versions():
 
 
 def test_actual_date_chunking_and_wind_query():
+    # Capture outgoing query parameters to verify the date chunks and WIND filter.
     requests = []
     def handler(request):
         requests.append(dict(request.url.params))
@@ -43,6 +56,7 @@ def test_actual_date_chunking_and_wind_query():
 
 
 def test_publication_chunk_boundary_once():
+    # Simulate upstream returning the same boundary record in adjacent chunks.
     calls = []
     row = forecast(publishTime='2026-01-08T00:00:00Z')
     def handler(request):
@@ -54,6 +68,8 @@ def test_publication_chunk_boundary_once():
     assert len(rows) == 1
 
 
+# parametrize runs the test once per bad payload. pytest.raises below means
+# "this operation must raise this error"; returning successfully would fail.
 @pytest.mark.parametrize('payload', [
     {'data': [forecast()]}, [forecast(startTime='2026-02-02T21:00:00')],
     [forecast(generation=None)], [forecast(generation='123')],
@@ -66,6 +82,8 @@ def test_invalid_upstream_response_fails_closed(payload):
 
 
 def test_retries_rate_limit_and_preserves_retry_after():
+    # Return two rate limits, then success. Recording sleeps avoids real waits
+    # while still checking that the client respects the two-second Retry-After.
     calls, sleeps = [], []
     def handler(request):
         calls.append(request)
@@ -77,6 +95,9 @@ def test_retries_rate_limit_and_preserves_retry_after():
 
 @pytest.mark.parametrize('status, expected', [(400, 502), (429, 503), (503, 503)])
 def test_http_errors(status, expected):
+    # "lambda _: None" accepts one argument but intentionally ignores it. The
+    # underscore is a conventional name, not special discard syntax in Python.
+    # Check the error code our backend will send and preserve Elexon's own code.
     with ElexonClient(transport=httpx.MockTransport(lambda _: httpx.Response(status)), sleep=lambda _: None) as client:
         with pytest.raises(ElexonError) as error:
             client.actual_wind(date(2026, 1, 1), date(2026, 1, 2))
@@ -85,6 +106,7 @@ def test_http_errors(status, expected):
 
 
 def test_timeout_is_bounded():
+    # A permanently slow service must fail after three attempts, not loop forever.
     calls = []
     def handler(request):
         calls.append(request)
@@ -96,6 +118,7 @@ def test_timeout_is_bounded():
 
 
 def test_validation_before_network_and_delivery_filter():
+    # Reject ambiguous dates/ranges and check the independent delivery-time filter.
     with ElexonClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[forecast()]))) as client:
         with pytest.raises(ValueError, match='timezone'):
             client.forecast_wind(datetime(2026, 1, 1), stamp('2026-02-01T00:00:00Z'))
@@ -107,6 +130,8 @@ def test_validation_before_network_and_delivery_filter():
 
 
 def test_actual_response_validation_and_offset_normalization():
+    # Different timezone representations of the same instant normalize to UTC.
+    # Returning GAS when WIND was requested is a data-contract failure.
     row = dict(dataset='FUELHH', fuelType='WIND', settlementDate='2026-01-01', settlementPeriod=1,
                startTime='2026-01-01T01:00:00+01:00', publishTime='2026-01-01T00:30:00Z', generation=123)
     with ElexonClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[row]))) as client:

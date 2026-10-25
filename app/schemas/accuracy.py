@@ -1,7 +1,7 @@
 """Pydantic schemas for forecast accuracy analysis.
 
-Defines response structures for statistical metrics (MAE, RMSE, Bias, Max Error),
-chart-ready half-hourly series, and historical multi-day summaries.
+Defines response structures for statistical metrics (MAE, RMSE, Bias, Max Error)
+and the chart-ready half-hourly series for one delivery day.
 """
 # Standard date and time representations.
 from datetime import date, time
@@ -60,43 +60,3 @@ class SingleDateAccuracyResponse(BaseModel):
     timezone: str = Field(default='Europe/London', description='Local market timezone')
     metrics: AccuracyMetrics = Field(description='Aggregate statistical accuracy metrics')
     chartData: list[ChartPeriodRecord] = Field(description='Chronological chart-ready half-hour periods')
-
-
-
-class DailyAccuracyRecord(BaseModel):
-    """Summary accuracy metrics for a single day in historical analysis."""
-    model_config = ConfigDict(extra='ignore')
-
-    decisionDate: date
-    deliveryDate: date
-    matchedPeriods: int
-    totalPeriods: int
-    maeMW: float | None = None
-    rmseMW: float | None = None
-    biasMW: float | None = None
-    maxAbsoluteErrorMW: float | None = None
-
-
-class PeriodProfileRecord(BaseModel):
-    """Half-hourly profile metric across the historical sample."""
-    model_config = ConfigDict(extra='ignore')
-
-    settlementPeriod: int
-    sampleCount: int
-    averageForecastMW: float | None = None
-    averageActualMW: float | None = None
-    averageMaeMW: float | None = None
-    averageBiasMW: float | None = None
-
-
-class HistoricalAccuracyResponse(BaseModel):
-    """Aggregate historical accuracy analysis across a date range."""
-    model_config = ConfigDict(extra='ignore')
-
-    decisionDateFrom: date = Field(description='Start of decision date range')
-    decisionDateTo: date = Field(description='End of decision date range')
-    totalDecisionDays: int = Field(description='Number of decision days analyzed')
-    cutoffTime: time = Field(description='Standard decision cutoff time')
-    overallMetrics: AccuracyMetrics = Field(description='Aggregate metrics over all matched periods in the range')
-    dailyBreakdown: list[DailyAccuracyRecord] = Field(description='Per-day accuracy breakdown')
-    periodProfile: list[PeriodProfileRecord] = Field(description='Average performance by settlement period')

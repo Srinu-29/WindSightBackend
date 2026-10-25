@@ -8,7 +8,6 @@ from app.schemas.accuracy import SingleDateAccuracyResponse
 from app.schemas.forecast import ForecastReplayResponse, PeriodEvaluation
 from app.services.accuracy_service import (
     calculate_metrics,
-    evaluate_historical_accuracy,
     evaluate_single_date_accuracy,
     explain_bias,
 )
@@ -156,94 +155,17 @@ def test_single_date_evaluation_chart_data():
     assert result.metrics.biasMW == 200.0
 
 
-def test_historical_accuracy_aggregation():
-    """Verify evaluate_historical_accuracy aggregates multiple days and period profiles."""
-    day1 = ForecastReplayResponse(
-        decisionDate=date(2026, 1, 1),
-        cutoffTime=time(14, 0),
-        cutoffUtc=utc_dt('2026-01-01T14:00:00Z'),
-        deliveryDate=date(2026, 1, 2),
-        timezone='Europe/London',
-        totalPeriods=2,
-        periodsWithForecast=2,
-        periodsWithActual=2,
-        periods=[
-            PeriodEvaluation(
-                startTime=utc_dt('2026-01-02T00:00:00Z'),
-                settlementPeriod=1,
-                forecastGenerationMW=5000.0,
-                actualGenerationMW=4800.0,
-                differenceMW=200.0,
-            ),
-            PeriodEvaluation(
-                startTime=utc_dt('2026-01-02T00:30:00Z'),
-                settlementPeriod=2,
-                forecastGenerationMW=6000.0,
-                actualGenerationMW=6200.0,
-                differenceMW=-200.0,
-            ),
-        ],
-    )
+def test_openapi_has_only_single_date_accuracy_route():
+    """The unused multi-day route must not be exposed by FastAPI."""
+    from app.main import app
 
-    day2 = ForecastReplayResponse(
-        decisionDate=date(2026, 1, 2),
-        cutoffTime=time(14, 0),
-        cutoffUtc=utc_dt('2026-01-02T14:00:00Z'),
-        deliveryDate=date(2026, 1, 3),
-        timezone='Europe/London',
-        totalPeriods=2,
-        periodsWithForecast=2,
-        periodsWithActual=2,
-        periods=[
-            PeriodEvaluation(
-                startTime=utc_dt('2026-01-03T00:00:00Z'),
-                settlementPeriod=1,
-                forecastGenerationMW=5200.0,
-                actualGenerationMW=5100.0,
-                differenceMW=100.0,
-            ),
-            PeriodEvaluation(
-                startTime=utc_dt('2026-01-03T00:30:00Z'),
-                settlementPeriod=2,
-                forecastGenerationMW=5800.0,
-                actualGenerationMW=5900.0,
-                differenceMW=-100.0,
-            ),
-        ],
-    )
-
-    result = evaluate_historical_accuracy(
-        start_date=date(2026, 1, 1),
-        end_date=date(2026, 1, 2),
-        cutoff_time=time(14, 0),
-        daily_replays=[day1, day2],
-        use_cache=False,
-    )
-
-    assert result.totalDecisionDays == 2
-    assert len(result.dailyBreakdown) == 2
-
-    # Overall: 4 pairs: +200, -200, +100, -100
-    # MAE = (200 + 200 + 100 + 100) / 4 = 150.0
-    # Bias = (200 - 200 + 100 - 100) / 4 = 0.0
-    assert result.overallMetrics.matchedPeriods == 4
-    assert result.overallMetrics.maeMW == 150.0
-    assert result.overallMetrics.biasMW == 0.0
-    assert result.overallMetrics.maxAbsoluteErrorMW == 200.0
-
-    # Period profiles
-    assert len(result.periodProfile) == 2
-    sp1 = result.periodProfile[0]
-    assert sp1.settlementPeriod == 1
-    assert sp1.sampleCount == 2
-    # sp1 forecasts: 5000, 5200 -> avg 5100; actuals: 4800, 5100 -> avg 4950; bias: +150
-    assert sp1.averageForecastMW == 5100.0
-    assert sp1.averageActualMW == 4950.0
-    assert sp1.averageBiasMW == 150.0
+    paths = app.openapi()['paths']
+    assert '/api/accuracy' in paths
+    assert '/api/historical-accuracy' not in paths
 
 
 def test_accuracy_endpoint_validation():
-    """Verify endpoint input validation for /api/accuracy and /api/historical-accuracy."""
+    """Verify invalid requests to /api/accuracy return validation errors."""
     from fastapi.testclient import TestClient
     from app.main import app
 
@@ -255,10 +177,6 @@ def test_accuracy_endpoint_validation():
         # Invalid date format returns 422
         res2 = client.get('/api/accuracy?decision_date=not-a-date')
         assert res2.status_code == 422
-
-        # Reversed dates on /api/historical-accuracy returns 422
-        res3 = client.get('/api/historical-accuracy?start_date=2026-01-15&end_date=2026-01-10')
-        assert res3.status_code == 422
 
 
 def test_accuracy_endpoint_success(monkeypatch):

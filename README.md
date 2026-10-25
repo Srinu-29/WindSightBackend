@@ -21,6 +21,8 @@ For macOS/Linux use `.venv/bin/python` and `cp`.
 
 `app/api` contains routes, `app/schemas` contains Pydantic models, and `app/services` is reserved for business logic and future HTTPX integrations. Configuration is documented in `.env.example`; defaults work without an `.env` file.
 
+`FRONTEND_ORIGINS` controls which browser addresses may call the backend directly. It is a comma-separated list. Local addresses are included by default. For deployment, set it to the real frontend URL, for example `https://windsight-frontend.onrender.com`. Do not use `*` for the production portal.
+
 The sibling Vite frontend proxies `/api` to this server, so browser requests stay on the frontend origin. Use a reverse proxy for separately hosted builds or configure explicit CORS origins when needed.
 
 ## Tests

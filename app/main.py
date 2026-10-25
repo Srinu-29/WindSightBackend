@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.elexon import router as elexon_router
@@ -22,6 +23,34 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 # and uses the second argument if it is missing. Uvicorn runs this app; the
 # command app.main:app means "load the app variable from app/main.py".
 app = FastAPI(title=os.getenv('APP_NAME', 'WindSight API'), version='0.1.0')
+
+# Browsers block a frontend from calling a backend on another web address unless
+# the backend explicitly allows that frontend address. This rule is called CORS.
+# FRONTEND_ORIGINS accepts a comma-separated list so local development, preview,
+# and the deployed portal can all be allowed without changing Python code.
+# rstrip('/') makes https://example.com and https://example.com/ equivalent here.
+default_frontend_origins = (
+    'http://localhost:5173,'
+    'http://localhost:4173,'
+    'http://localhost:8080'
+)
+frontend_origins = [
+    origin.strip().rstrip('/')
+    for origin in os.getenv('FRONTEND_ORIGINS', default_frontend_origins).split(',')
+    if origin.strip()
+]
+
+# Middleware runs around every request. Only the listed websites receive
+# permission to read this API from browser JavaScript. WindSight currently uses
+# GET requests and no login cookies, so credentials remain disabled.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=frontend_origins,
+    allow_credentials=False,
+    allow_methods=['GET'],
+    allow_headers=['*'],
+)
+
 # include_router is like app.use('/api', router). These lines connect the
 # route collections to the app. FastAPI also builds /docs from their definitions.
 app.include_router(health_router, prefix='/api')

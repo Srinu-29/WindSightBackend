@@ -9,6 +9,8 @@ from fastapi import FastAPI
 
 from app.api.health import router as health_router
 from app.api.elexon import router as elexon_router
+from app.api.forecast import router as forecast_router
+from app.api.accuracy import router as accuracy_router
 
 # Find backend/.env relative to this file, not the terminal's current folder.
 # Missing .env files are allowed. Existing system environment values take priority.
@@ -22,6 +24,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 app = FastAPI(title=os.getenv('APP_NAME', 'WindSight API'), version='0.1.0')
 # include_router is like app.use('/api', router). These lines connect the
 # route collections to the app. FastAPI also builds /docs from their definitions.
-# Both route groups are always registered; there is no inspection switch.
 app.include_router(health_router, prefix='/api')
+app.include_router(forecast_router, prefix='/api')
+app.include_router(accuracy_router, prefix='/api')
 app.include_router(elexon_router, prefix='/api')

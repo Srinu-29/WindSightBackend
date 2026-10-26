@@ -1,5 +1,5 @@
 # Backend entry point, similar to app.js in Express.
-# Read this file first, then api/elexon.py, schemas/elexon.py, and
+# Read this file first, then api/accuracy.py, schemas/accuracy.py, and
 # services/elexon_client.py to follow a request from URL to external data.
 import os
 from pathlib import Path
@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
-from app.api.elexon import router as elexon_router
 from app.api.forecast import router as forecast_router
 from app.api.accuracy import router as accuracy_router
 
@@ -56,4 +55,3 @@ app.add_middleware(
 app.include_router(health_router, prefix='/api')
 app.include_router(forecast_router, prefix='/api')
 app.include_router(accuracy_router, prefix='/api')
-app.include_router(elexon_router, prefix='/api')
